@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Hotel Pacing & Pickup · OTB vs STLY (Snapshots)</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --bg1:#667eea;--bg2:#764ba2;--panelTint:rgba(255,255,255,.95);
+    --ink:#2c3e50;--inkSoft:#7f8c8d;--brand1:#3498db;--brand2:#2980b9;
+    --dark1:#2c3e50;--dark2:#34495e;--posBg:#d1edcc;--pos:#155724;
+    --negBg:#f8d7da;--neg:#721c24;--grid:#e0e0e0
+  }
+  body{
+    font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;
+    background:linear-gradient(135deg,var(--bg1),var(--bg2));
+    min-height:100vh;padding:20px
+  }
+  .container{
+    max-width:1400px;margin:0 auto;background:var(--panelTint);
+    border-radius:20px;box-shadow:0 20px 40px rgba(0,0,0,.1);
+    backdrop-filter:blur(10px);overflow:hidden
+  }
+  .header{background:linear-gradient(135deg,var(--dark1),var(--brand1));color:#fff;padding:24px;text-align:center}
+  .header h1{font-size:2em;margin-bottom:6px;text-shadow:2px 2px 4px rgba(0,0,0,.25)}
+  .toolbar{position:sticky;top:0;z-index:5;background:#f9fbff;border-bottom:1px solid #e9edf3;padding:12px 16px;display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+  .btn{border:1px solid #dbe3ee;background:#fff;color:#1f2d3d;padding:8px 12px;border-radius:8px;cursor:pointer;font-weight:600;transition:.2s transform,.2s box-shadow}
+  .btn.primary{background:linear-gradient(135deg,var(--brand1),var(--brand2));color:#fff;border:none}
+  .btn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(0,0,0,.08)}
+  input[type="file"]{display:none}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:#2c3e50;padding:6px 10px;background:#eef4ff;border:1px solid #d7e2ff;border-radius:999px}
+  .content{padding:22px}
+  .small{font-size:12px;color:#6b7a90}
+  .section{margin-bottom:22px;background:#fff;border-radius:12px;box-shadow:0 5px 15px rgba(0,0,0,.08);overflow:hidden}
+  .section-header{background:linear-gradient(135deg,#34495e,#2c3e50);color:#fff;padding:14px 16px;font-weight:800;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}
+  .drop{border:2px dashed #cdd8f6;border-radius:12px;padding:14px 16px;background:#f8fbff}
+  .drop h4{margin-bottom:6px;color:#0b3b65}
+  .hint{font-size:12px;color:#6b7a90}
+  .kpi-bar{display:flex;gap:12px;flex-wrap:wrap;padding:14px}
+  .kpi{flex:1;min-width:200px;background:#f9fbff;border:1px solid #e6ecf7;border-radius:12px;padding:10px 12px;text-align:center}
+  .kpi .v{font-size:20px;font-weight:900;color:#1e2a3a}
+  .kpi .l{font-size:12px;color:#6b7a90;text-transform:uppercase;letter-spacing:.6px}
+  .stat{display:inline-block;padding:4px 8px;border-radius:8px;border:1px solid #e6ecf7;background:#f9fbff;font-size:12px;margin-right:6px}
+  .table-container{overflow-x:auto;padding:14px}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{padding:9px 8px;text-align:center;border:1px solid var(--grid);min-width:110px;white-space:nowrap}
+  th{background:linear-gradient(135deg,#f8f9fa,#e9ecef);font-weight:800;color:#2c3e50;text-transform:uppercase;font-size:11px;letter-spacing:.5px}
+  .left{text-align:left}
+  .total-row{background:linear-gradient(135deg,#2c3e50,#34495e);color:#fff;font-weight:900}
+  .variance-positive{background:var(--posBg);color:var(--pos);font-weight:800}
+  .variance-negative{background:var(--negBg);color:var(--neg);font-weight:800}
+  canvas{max-width:100%;height:340px}
+  .input{width:100%;padding:6px;border:1px solid #dde4f2;border-radius:8px;text-align:center}
+  /* Outlook cards */
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;padding:14px}
+  .card{border:1px solid #e6ecf7;border-radius:12px;background:#f9fbff;padding:12px}
+  .card h4{margin-bottom:8px}
+  .grid-form{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .grid-form label{font-size:12px;color:#6b7a90}
+  .grid-form .span2{grid-column:span 2}
+  .muted{color:#6b7a90;font-size:12px}
+  @media (max-width: 640px){
+    .toolbar{justify-content:stretch}
+    .pill{width:100%;justify-content:space-between}
+    th,td{min-width:96px}
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>📈 Pacing & Daily Pickup — Snapshot Driven</h1>
+    <p>Commit daily OTB snapshots (TY & STLY), compare any two dates, and see per-day pickup & TY vs STLY variances. TXT & XLSX supported.</p>
+  </div>
+
+  <div class="toolbar">
+    <button class="btn primary" id="saveBtn">Save</button>
+    <button class="btn" id="loadBtn">Load</button>
+    <button class="btn" id="exportBtn">Export (.json)</button>
+    <label class="btn" for="importFile">Import (.json)</label><input id="importFile" type="file" accept=".json"/>
+    <a class="btn" href="index.html">← Back to Dashboard</a>
+  </div>
+
+  <div class="content">
+
+    <!-- SNAPSHOT UPLOADS + CONTROLS -->
+    <div class="section">
+      <div class="section-header">
+        <span>📤 Upload & Commit Snapshots (TY & STLY)</span>
+        <div class="row">
+          <label class="pill" title="Permanent — used for Occ% and month totals">
+            Hotel Total Rooms: <input type="number" id="totalRooms" value="0" style="width:90px" class="input"/>
+          </label>
+          <span class="small">Tip: Commit TY daily to track real pickup (TY today – TY yesterday).</span>
+        </div>
+      </div>
+      <div class="table-container">
+        <div class="grid2">
+
+          <!-- TY -->
+          <div class="drop">
+            <h4>TY (This Year) Snapshot</h4>
+            <div class="row">
+              <label class="btn"><input id="tyFile" type="file" accept=".xlsx,.xls,.txt">Choose .xlsx or .txt</label>
+              <span id="tyMeta" class="hint">No file loaded.</span>
+            </div>
+            <div class="row" style="margin-top:8px">
+              <label class="pill">Snapshot Date: <input type="date" id="tyAsOf" class="input"/></label>
+              <label class="pill">Stay Year: <select id="tyStayYear" class="input"></select></label>
+              <label class="pill">Stay Month (TY): <select id="tyStayMonth" class="input"></select></label>
+              <button class="btn" id="commitTyUploadBtn">Commit TY from File for Month</button>
+            </div>
+          </div>
+
+          <!-- STLY -->
+          <div class="drop">
+            <h4>STLY (Same Time Last Year) Snapshot</h4>
+            <div class="row">
+              <label class="btn"><input id="stlyFile" type="file" accept=".xlsx,.xls,.txt">Choose .xlsx or .txt</label>
+              <span id="stlyMeta" class="hint">No file loaded.</span>
+            </div>
+            <div class="row" style="margin-top:8px">
+              <label class="pill">Snapshot Date: <input type="date" id="stlyAsOf" class="input"/></label>
+              <label class="pill">Align STLY to Year: <select id="alignYear" class="input"></select></label>
+              <label class="pill">Stay Month (STLY): <select id="stlyStayMonth" class="input"></select></label>
+              <button class="btn" id="commitStlyUploadBtn">Commit STLY from File for Month</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+      <div class="table-container">
+        <div class="row">
+          <label class="pill">View Month:
+            <select id="monthFilter" class="input">
+              <option value="-1">All Months</option>
+              <option value="0">January</option><option value="1">February</option><option value="2">March</option>
+              <option value="3">April</option><option value="4">May</option><option value="5">June</option>
+              <option value="6">July</option><option value="7">August</option><option value="8">September</option>
+              <option value="9">October</option><option value="10">November</option><option value="11">December</option>
+            </select>
+          </label>
+
+          <label class="pill">TY Snapshot to View:
+            <select id="tySnapshotSelect" class="input"></select>
+          </label>
+          <label class="pill">Pickup Baseline (TY):
+            <select id="pickupBaselineSelect" class="input"></select>
+          </label>
+
+          <label class="pill">STLY Snapshot to View:
+            <select id="stlySnapshotSelect" class="input"></select>
+          </label>
+
+          <span class="stat" id="rangeStat">Range: —</span>
+          <span class="stat" id="countStat">Days in view: —</span>
+          <span class="stat" id="sourceStat">Source: —</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- OUTLOOK (Current month remaining + next 3 months) -->
+    <div class="section">
+      <div class="section-header">
+        <span>🗓️ Outlook — Current Month (remaining) + Next 3 Months</span>
+        <span class="muted">Enter TY RN & ADR (revenue auto-calculates). Optional: LY RN & ADR.</span>
+      </div>
+      <div class="cards" id="outlookCards"></div>
+      <div class="row" style="padding:0 14px 14px">
+        <button class="btn" id="resetOutlook">Reset Outlook</button>
+      </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="section">
+      <div class="section-header">🧩 Pacing Summary (Current View)</div>
+      <div class="kpi-bar">
+        <div class="kpi"><div class="v" id="kRoomsTY">0</div><div class="l">Rooms OTB (TY)</div></div>
+        <div class="kpi"><div class="v" id="kRoomsSTLY">0</div><div class="l">Rooms OTB (STLY)</div></div>
+        <div class="kpi"><div class="v" id="kRoomsVar">0</div><div class="l">Rooms Var (TY–STLY)</div></div>
+        <div class="kpi"><div class="v" id="kPickupRooms">0</div><div class="l">Pickup Rooms (TY vs baseline)</div></div>
+        <div class="kpi"><div class="v" id="kRevTY">$0</div><div class="l">Revenue OTB (TY)</div></div>
+        <div class="kpi"><div class="v" id="kRevSTLY">$0</div><div class="l">Revenue OTB (STLY)</div></div>
+        <div class="kpi"><div class="v" id="kRevVar">$0</div><div class="l">Revenue Var (TY–STLY)</div></div>
+        <div class="kpi"><div class="v" id="kPickupRev">$0</div><div class="l">Pickup Rev (TY vs baseline)</div></div>
+      </div>
+    </div>
+
+    <!-- TABLE -->
+    <div class="section">
+      <div class="section-header">📊 Daily OTB · Pickup (TY vs baseline) · Variance (TY vs STLY)</div>
+      <div class="table-container">
+        <table id="paceTable">
+          <thead>
+            <tr>
+              <th class="left">Date</th>
+              <th>Rooms OTB (TY)</th>
+              <th>Pickup Rooms</th>
+              <th>Rooms OTB (STLY)</th>
+              <th>Rooms Var (TY–STLY)</th>
+              <th>Occ% (TY)</th>
+              <th>Occ% (STLY)</th>
+              <th>Occ Var (TY–STLY)</th>
+              <th>ADR (TY)</th>
+              <th>ADR (STLY)</th>
+              <th>ADR Var (TY–STLY)</th>
+              <th>Pickup Rev</th>
+              <th>Rev (TY)</th>
+              <th>Rev (STLY)</th>
+              <th>Rev Var (TY–STLY)</th>
+            </tr>
+          </thead>
+          <tbody id="paceBody"></tbody>
+          <tfoot>
+            <tr class="total-row">
+              <th class="left">Totals (View)</th>
+              <td id="tRoomsTY">0</td>
+              <td id="tPickupRooms">0</td>
+              <td id="tRoomsSTLY">0</td>
+              <td id="tRoomsVar">0</td>
+              <td id="tOccTY">0%</td>
+              <td id="tOccSTLY">0%</td>
+              <td id="tOccVar">0%</td>
+              <td id="tADRTY">$0</td>
+              <td id="tADRSTLY">$0</td>
+              <td id="tADRVar">$0</td>
+              <td id="tPickupRev">$0</td>
+              <td id="tRevTY">$0</td>
+              <td id="tRevSTLY">$0</td>
+              <td id="tRevVar">$0</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <div class="row" style="padding:0 14px 14px">
+        <button class="btn" id="downloadCsvBtn">Download CSV</button>
+      </div>
+    </div>
+
+    <!-- CHARTS -->
+    <div class="section">
+      <div class="section-header">📉 Visualization</div>
+      <div class="table-container">
+        <canvas id="roomsChart"></canvas>
+      </div>
+      <div class="table-container">
+        <canvas id="revChart"></canvas>
+      </div>
+      <div class="table-container">
+        <canvas id="cumChart"></canvas>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- libs -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<script>
+(function(){
+  const qs=(s,r=document)=>r.querySelector(s);
+  const qsa=(s,r=document)=>Array.from(r.querySelectorAll(s));
+  const fmtC=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',minimumFractionDigits:0}).format(Number(n)||0);
+  const fmtP=v=>((Number.isFinite(v)?v:0).toFixed(1))+'%';
+  const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const STORAGE_KEY='pacing_snapshots_v3';
+  const mmdd=d=>String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+
+  const cleanNum = s => {
+    if (s==null) return 0;
+    s = String(s).replace(/(?<=\d),(?=\d)/g,'').replace(/[$,%]/g,'').trim();
+    if (!s) return 0;
+    const v = parseFloat(s);
+    return Number.isFinite(v)?v:0;
+  };
+  function parseDdmmyyToken(tok){
+    const m = tok.match(/^(\d{2})([A-Za-z]{3})(\d{2})$/);
+    if(!m) return null;
+    const d = +m[1];
+    const mon = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11}[m[2]];
+    const y = 2000 + (+m[3]);
+    if(mon==null) return null;
+    return new Date(y,mon,d);
+  }
+
+  /* ---------- State ---------- */
+  const state = {
+    totalRooms: 0,
+    loadedTY: [], loadedSTLY: [],
+    snapshotsTY: {}, snapshotsSTLY: {},
+    activeTY: null, baselineTY: null, activeSTLY: null,
+    alignYear: new Date().getFullYear(),
+    monthFilter: -1,
+    outlook: {}
+  };
+
+  /* ---------- UI builders ---------- */
+  function daysInMonth(y,m){ return new Date(y,m+1,0).getDate(); }
+  function buildMonthSelect(sel, value){
+    if(!sel) return;
+    sel.innerHTML='';
+    for(let i=0;i<12;i++){
+      const o=document.createElement('option'); o.value=String(i); o.textContent=MONTHS[i];
+      if (i===value) o.selected=true;
+      sel.appendChild(o);
+    }
+  }
+  function buildYearSelect(sel, centerYear, span=4, value){
+    if(!sel) return;
+    sel.innerHTML='';
+    for(let y=centerYear-span; y<=centerYear+span; y++){
+      const o=document.createElement('option'); o.value=String(y); o.textContent=String(y);
+      if (y===value) o.selected=true;
+      sel.appendChild(o);
+    }
+  }
+  function ensureUploadSelectors(){
+    const now = new Date();
+    buildYearSelect(qs('#tyStayYear'), now.getFullYear(), 3, now.getFullYear());
+    buildMonthSelect(qs('#tyStayMonth'), now.getMonth());
+    buildMonthSelect(qs('#stlyStayMonth'), now.getMonth());
+    buildYearSelect(qs('#alignYear'), now.getFullYear(), 3, state.alignYear);
+  }
+
+  /* ---------- Parsing (TXT & XLSX) ---------- */
+  function parseBSRtxt(text, totalRoomsHint=0){
+    const lines = text.split(/\r?\n/);
+    const out = [];
+    for(const line of lines){
+      const m = line.match(/^\s*(\d{2}[A-Za-z]{3}\d{2})\s+(.*)$/);
+      if(!m) continue;
+      const d = parseDdmmyyToken(m[1]);
+      if(!d) continue;
+
+      const tail = m[2].replace(/(?<=\d),(?=\d)/g,''); // strip thousands commas
+      const toks = tail.trim().split(/\s+/);
+
+      // Try fixed positions first (from earlier samples)
+      let sold=0, rev=0, avail=0, occPct=0, adr=0;
+      if (toks.length >= 10){
+        const s = cleanNum(toks[6]);
+        const r = cleanNum(toks[8]);
+        const a = cleanNum(toks[9]);
+        const av = cleanNum(toks[toks.length-2]);
+        const ocMaybe = cleanNum(toks[toks.length-1]);
+        sold = Number.isFinite(s)?s:0;
+        rev  = Number.isFinite(r)?r:0;
+        adr  = Number.isFinite(a)&&a>0?a: (sold>0?rev/sold:0);
+        avail= Number.isFinite(av)&&av>0?av:(totalRoomsHint||0);
+        occPct = avail>0 ? (sold/avail)*100 : (Number.isFinite(ocMaybe)?ocMaybe:0);
+      }
+
+      // Fallback: scan numerics in tail if above failed
+      if (sold===0 && rev===0){
+        const nums = tail.match(/-?\d+(?:\.\d+)?%?/g)||[];
+        const perc = nums.filter(t=>/%$/.test(t)).map(cleanNum);
+        const vals = nums.filter(t=>!/%$/.test(t)).map(cleanNum);
+        if (vals.length){
+          const ints = vals.filter(v=>Math.abs(v)%1===0);
+          if (ints.length) sold = Math.max(0, ints[0]);
+          const decimals = vals.filter(v=>String(v).includes('.'));
+          if (decimals.length){
+            const maxd = Math.max(...decimals);
+            if (maxd < 1000) adr = maxd; else rev = maxd;
+          }
+          if (!rev && sold && adr) rev = sold*adr;
+          if (!adr && sold && rev) adr = rev/sold;
+          avail = totalRoomsHint||0;
+          occPct = avail? (sold/avail)*100 : 0;
+          if (perc.length && !avail) occPct = perc[0];
+        }
+      }
+
+      out.push({date:d, md:mmdd(d), year:d.getFullYear(), sold, avail, occ:occPct, rev, adr});
+    }
+    return out;
+  }
+
+  function parseBSRxlsx(file, done){
+    const reader = new FileReader();
+    reader.onload = (e)=>{
+      const wb = XLSX.read(e.target.result, {type:'binary'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+      let headerIdx = rows.findIndex(r => r.some(v=>/Date/i.test(v)) && r.some(v=>/(Room\s*Rev|Revenue)/i.test(v)));
+      if (headerIdx===-1) headerIdx = 0;
+      const headers = rows[headerIdx].map(h=>String(h).trim());
+      const dataRows = rows.slice(headerIdx+1).filter(r => r && r.length>0);
+      const findCol = (...names)=> headers.findIndex(h=>names.some(n=> new RegExp(n,'i').test(h)));
+      const cDate  = findCol('Date');
+      const cSold  = findCol('Sold','Rooms Sold');
+      const cAvail = findCol('Avail','Available');
+      const cOcc   = findCol('Occ','Occupancy');
+      const cRev   = findCol('Room Rev','Revenue','Room Revenue');
+      const cADR   = findCol('Avg Rm Rev','ADR','Average Rate');
+      const out=[];
+      for(const r of dataRows){
+        const rawDate = r[cDate];
+        if(!rawDate) continue;
+        let d;
+        if (typeof rawDate === 'string' && /^\d{2}[A-Za-z]{3}\d{2}$/.test(rawDate)) d = parseDdmmyyToken(rawDate);
+        else d = new Date(rawDate);
+        if (isNaN(d)) continue;
+
+        const sold = cleanNum(r[cSold]);
+        const avail= cleanNum(r[cAvail]);
+        const occRaw  = cOcc>=0 ? cleanNum(r[cOcc]) : 0;
+        const rev  = cleanNum(r[cRev]);
+        let adr  = cADR>=0 ? cleanNum(r[cADR]) : 0;
+        if (!adr && sold>0 && rev>0) adr = rev/sold;
+        const occ = avail>0 ? (sold/avail)*100 : occRaw;
+
+        out.push({date:d, md:mmdd(d), year:d.getFullYear(), sold, avail, occ, rev, adr});
+      }
+      done(out);
+    };
+    reader.readAsBinaryString(file);
+  }
+
+  // Promise wrapper so Commit can auto-parse if needed
+  function parseFileToRows(file, totalRoomsHint=0){
+    return new Promise((resolve,reject)=>{
+      const name = (file?.name||'').toLowerCase();
+      if (!file) return reject('no file');
+      if (name.endsWith('.txt')){
+        const fr=new FileReader();
+        fr.onload=e=>{ try{
+          const rows = parseBSRtxt(String(e.target.result||''), totalRoomsHint);
+          resolve(rows);
+        }catch(err){ reject(err); } };
+        fr.onerror=reject; fr.readAsText(file);
+      }else if(name.endsWith('.xlsx')||name.endsWith('.xls')){
+        parseBSRxlsx(file, rows=> resolve(rows||[]) );
+      }else{
+        reject('unsupported');
+      }
+    });
+  }
+
+  const fileToText = (file)=>new Promise((resolve,reject)=>{
+    const fr = new FileReader();
+    fr.onload = e=>resolve(e.target.result);
+    fr.onerror = reject;
+    fr.readAsText(file);
+  });
+
+  /* ---------- Snapshots ---------- */
+  function commitSnapshot(which, rows, asOf, stayYear, stayMonth){
+    if (!asOf){ flash('Pick a Snapshot Date'); return; }
+    if (!rows || !rows.length){ flash('Load a file first'); return; }
+    const key = which==='TY' ? 'snapshotsTY' : 'snapshotsSTLY';
+
+    const filtered = rows
+      .filter(r => r.date.getFullYear()===stayYear && r.date.getMonth()===stayMonth)
+      .map(r=>({
+        ...r,
+        adr: (r.sold>0 && r.rev>0) ? (r.rev/r.sold) : (r.adr||0),
+        occ: (r.avail>0 && r.sold>=0) ? (r.sold/r.avail)*100 : (r.occ||0)
+      }))
+      .sort((a,b)=>a.date-b.date);
+
+    if (!filtered.length){ flash('No rows found for selected stay month/year'); return; }
+
+    state[key][asOf] = filtered;
+    if (which==='TY'){ state.activeTY = asOf; if (!state.baselineTY) state.baselineTY = asOf; }
+    if (which==='STLY'){ state.activeSTLY = asOf; }
+
+    refreshSelectors();
+    afterDataChange();
+    flash(`${which} snapshot ${asOf} committed (${filtered.length} days).`);
+  }
+
+  function refreshSelectors(){
+    const tySel = qs('#tySnapshotSelect');
+    const baseSel = qs('#pickupBaselineSelect');
+    const stlySel = qs('#stlySnapshotSelect');
+    function fill(sel, obj, current){
+      if(!sel) return;
+      sel.innerHTML='';
+      const keys = Object.keys(obj).sort();
+      if (!keys.length){
+        const o=document.createElement('option'); o.value=''; o.textContent='— none —';
+        sel.appendChild(o); return;
+      }
+      keys.forEach(k=>{
+        const o=document.createElement('option'); o.value=k; o.textContent=k;
+        if (k===current) o.selected=true;
+        sel.appendChild(o);
+      });
+    }
+    fill(tySel, state.snapshotsTY, state.activeTY);
+    fill(baseSel, state.snapshotsTY, state.baselineTY);
+    fill(stlySel, state.snapshotsSTLY, state.activeSTLY);
+  }
+
+  /* ---------- Upload wiring ---------- */
+  qs('#tyFile').addEventListener('change', async (e)=>{
+    const f=e.target.files?.[0]; if(!f) return;
+    const name=f.name.toLowerCase();
+    if (name.endsWith('.txt')){
+      try{
+        const text = await fileToText(f);
+        state.loadedTY = parseBSRtxt(text, state.totalRooms||0).sort((a,b)=>a.date-b.date);
+        qs('#tyMeta').textContent = `${f.name} · ${state.loadedTY.length} lines parsed`;
+      }catch{ qs('#tyMeta').textContent='Failed to read TXT'; }
+    }else if(name.endsWith('.xlsx')||name.endsWith('.xls')){
+      parseBSRxlsx(f, rows=>{
+        state.loadedTY = (rows||[]).sort((a,b)=>a.date-b.date);
+        qs('#tyMeta').textContent = `${f.name} · ${state.loadedTY.length} rows parsed`;
+      });
+    }else{
+      qs('#tyMeta').textContent='Unsupported file type';
+    }
+  });
+  qs('#stlyFile').addEventListener('change', async (e)=>{
+    const f=e.target.files?.[0]; if(!f) return;
+    const name=f.name.toLowerCase();
+    if (name.endsWith('.txt')){
+      try{
+        const text = await fileToText(f);
+        state.loadedSTLY = parseBSRtxt(text, state.totalRooms||0).sort((a,b)=>a.date-b.date);
+        qs('#stlyMeta').textContent = `${f.name} · ${state.loadedSTLY.length} lines parsed`;
+      }catch{ qs('#stlyMeta').textContent='Failed to read TXT'; }
+    }else if(name.endsWith('.xlsx')||name.endsWith('.xls')){
+      parseBSRxlsx(f, rows=>{
+        state.loadedSTLY = (rows||[]).sort((a,b)=>a.date-b.date);
+        qs('#stlyMeta').textContent = `${f.name} · ${state.loadedSTLY.length} rows parsed`;
+      });
+    }else{
+      qs('#stlyMeta').textContent='Unsupported file type';
+    }
+  });
+
+  // Commit buttons auto-parse selected file if nothing is loaded yet
+  qs('#commitTyUploadBtn').addEventListener('click', async ()=>{
+    const asOf = qs('#tyAsOf').value;
+    const stayYear = parseInt(qs('#tyStayYear').value) || new Date().getFullYear();
+    const stayMonth = parseInt(qs('#tyStayMonth').value);
+    let rows = state.loadedTY;
+    if ((!rows || !rows.length) && qs('#tyFile').files?.[0]){
+      try{
+        const f = qs('#tyFile').files[0];
+        rows = await parseFileToRows(f, state.totalRooms||0);
+        state.loadedTY = rows.slice().sort((a,b)=>a.date-b.date);
+        qs('#tyMeta').textContent = `${f.name} · ${state.loadedTY.length} ${f.name.toLowerCase().endsWith('.txt')?'lines':'rows'} parsed`;
+      }catch{ flash('Could not read TY file'); return; }
+    }
+    commitSnapshot('TY', rows, asOf, stayYear, Number.isFinite(stayMonth)?stayMonth:new Date().getMonth());
+  });
+
+  qs('#commitStlyUploadBtn').addEventListener('click', async ()=>{
+    const asOf = qs('#stlyAsOf').value;
+    const align = parseInt(qs('#alignYear').value) || new Date().getFullYear();
+    const stayYear = align - 1;
+    const stayMonth = parseInt(qs('#stlyStayMonth').value);
+    let rows = state.loadedSTLY;
+    if ((!rows || !rows.length) && qs('#stlyFile').files?.[0]){
+      try{
+        const f = qs('#stlyFile').files[0];
+        rows = await parseFileToRows(f, state.totalRooms||0);
+        state.loadedSTLY = rows.slice().sort((a,b)=>a.date-b.date);
+        qs('#stlyMeta').textContent = `${f.name} · ${state.loadedSTLY.length} ${f.name.toLowerCase().endsWith('.txt')?'lines':'rows'} parsed`;
+      }catch{ flash('Could not read STLY file'); return; }
+    }
+    commitSnapshot('STLY', rows, asOf, stayYear, Number.isFinite(stayMonth)?stayMonth:new Date().getMonth());
+  });
+
+  /* ---------- Alignment & merge ---------- */
+  function alignSTLYToYear(stlyRows, targetYear){
+    return stlyRows.map(r=>{
+      const mapped = new Date(targetYear, r.date.getMonth(), r.date.getDate());
+      return {...r, date:mapped, md:mmdd(mapped), year:targetYear};
+    }).sort((a,b)=>a.date-b.date);
+  }
+  function getActiveRows(){
+    const ty = state.activeTY ? (state.snapshotsTY[state.activeTY]||[]) : [];
+    const stlyOrig = state.activeSTLY ? (state.snapshotsSTLY[state.activeSTLY]||[]) : [];
+    const stly = alignSTLYToYear(stlyOrig, state.alignYear);
+    const baseline = state.baselineTY ? (state.snapshotsTY[state.baselineTY]||[]) : [];
+    return {ty, stly, baseline};
+  }
+
+  /* ---------- Render table & KPIs ---------- */
+  function addVarCell(td, val, isCurrency=false, isPercent=false){
+    const num = Number(val);
+    if (isPercent) td.textContent = fmtP(num);
+    else if (isCurrency) td.textContent = fmtC(num);
+    else td.textContent = Number.isFinite(num)? String(num) : (val??'');
+    td.classList.remove('variance-positive','variance-negative');
+    if (Number.isFinite(num)){
+      if (num>0) td.classList.add('variance-positive');
+      else if (num<0) td.classList.add('variance-negative');
+    }
+  }
+  function filterByMonth(rows){
+    if (state.monthFilter===-1) return rows;
+    return rows.filter(r=> r.date.getMonth()===state.monthFilter );
+  }
+  function groupByMd(rows){
+    const m=new Map(); rows.forEach(r=> m.set(r.md, r)); return m;
+  }
+
+  function renderTable(){
+    const {ty, stly, baseline} = getActiveRows();
+    const tyMap = groupByMd(filterByMonth(ty));
+    const stlyMap = groupByMd(filterByMonth(stly));
+    const baseMap = groupByMd(filterByMonth(baseline));
+
+    const allMds = Array.from(new Set([...tyMap.keys(), ...stlyMap.keys(), ...baseMap.keys()]));
+    const rows = allMds.map(md=>{
+      const t = tyMap.get(md)||{};
+      const s = stlyMap.get(md)||{};
+      const b = baseMap.get(md)||{};
+      const date = t.date || s.date || b.date;
+      return {date, md, t, s, b};
+    }).sort((a,b)=>a.date-b.date);
+
+    const tb=qs('#paceBody'); tb.innerHTML='';
+    let tySoldSum=0, stlySoldSum=0, tyRevSum=0, stlyRevSum=0, pickupRoomsSum=0, pickupRevSum=0, days=0;
+
+    rows.forEach(r=>{
+      const tSold = cleanNum(r.t.sold)||0;
+      const tRev  = cleanNum(r.t.rev)||0;
+      const tAdr  = tSold>0 ? (tRev/tSold) : 0;
+
+      const sSold = cleanNum(r.s.sold)||0;
+      const sRev  = cleanNum(r.s.rev)||0;
+      const sAdr  = sSold>0 ? (sRev/sSold) : 0;
+
+      const bSold = cleanNum(r.b.sold)||0;
+      const bRev  = cleanNum(r.b.rev)||0;
+
+      const pickupRooms = tSold - bSold;
+      const pickupRev   = tRev  - bRev;
+      const roomsVar    = tSold - sSold;
+      const revVar      = tRev  - sRev;
+      const adrVar      = tAdr  - sAdr;
+
+      let occTyPct=0, occStlyPct=0;
+      if (state.totalRooms>0){
+        occTyPct   = tSold>0 ? (tSold/state.totalRooms)*100 : 0;
+        occStlyPct = sSold>0 ? (sSold/state.totalRooms)*100 : 0;
+      }else{
+        occTyPct   = r.t.avail>0 ? (tSold/r.t.avail)*100 : 0;
+        occStlyPct = r.s.avail>0 ? (sSold/r.s.avail)*100 : 0;
+      }
+      const occVar = occTyPct - occStlyPct;
+
+      const tr=document.createElement('tr');
+      tr.innerHTML=`
+        <td class="left">${(r.date||new Date()).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'2-digit'})}</td>
+        <td>${tSold}</td>
+        <td></td>
+        <td>${sSold}</td>
+        <td></td>
+        <td>${fmtP(occTyPct)}</td>
+        <td>${fmtP(occStlyPct)}</td>
+        <td></td>
+        <td>${fmtC(tAdr)}</td>
+        <td>${fmtC(sAdr)}</td>
+        <td>${fmtC(adrVar)}</td>
+        <td></td>
+        <td>${fmtC(tRev)}</td>
+        <td>${fmtC(sRev)}</td>
+        <td></td>
+      `;
+      addVarCell(tr.children[2], pickupRooms, false);
+      addVarCell(tr.children[4], roomsVar, false);
+      addVarCell(tr.children[7], occVar, false, true);
+      addVarCell(tr.children[11], pickupRev, true);
+      addVarCell(tr.children[14], revVar, true);
+
+      tySoldSum+=tSold; stlySoldSum+=sSold; tyRevSum+=tRev; stlyRevSum+=sRev;
+      pickupRoomsSum+=pickupRooms; pickupRevSum+=pickupRev; days++;
+      tb.appendChild(tr);
+    });
+
+    const tyADR = tySoldSum>0 ? tyRevSum/tySoldSum : 0;
+    const stlyADR = stlySoldSum>0 ? stlyRevSum/stlySoldSum : 0;
+    const rooms = state.totalRooms>0 ? state.totalRooms : 0;
+    const occTyTotal = (rooms>0 && days>0) ? (tySoldSum/(rooms*days))*100 : 0;
+    const occStlyTotal = (rooms>0 && days>0) ? (stlySoldSum/(rooms*days))*100 : 0;
+
+    qs('#tRoomsTY').textContent=tySoldSum;
+    qs('#tPickupRooms').textContent=pickupRoomsSum;
+    qs('#tRoomsSTLY').textContent=stlySoldSum;
+    addVarCell(qs('#tRoomsVar'), tySoldSum - stlySoldSum, false);
+
+    qs('#tOccTY').textContent=fmtP(occTyTotal);
+    qs('#tOccSTLY').textContent=fmtP(occStlyTotal);
+    qs('#tOccVar').textContent=fmtP(occTyTotal - occStlyTotal);
+
+    qs('#tADRTY').textContent=fmtC(tyADR);
+    qs('#tADRSTLY').textContent=fmtC(stlyADR);
+    qs('#tADRVar').textContent=fmtC(tyADR - stlyADR);
+
+    qs('#tPickupRev').textContent=fmtC(pickupRevSum);
+    qs('#tRevTY').textContent=fmtC(tyRevSum);
+    qs('#tRevSTLY').textContent=fmtC(stlyRevSum);
+    addVarCell(qs('#tRevVar'), tyRevSum - stlyRevSum, true);
+
+    qs('#kRoomsTY').textContent=tySoldSum;
+    qs('#kRoomsSTLY').textContent=stlySoldSum;
+    qs('#kRoomsVar').textContent=(tySoldSum - stlySoldSum);
+    qs('#kPickupRooms').textContent=pickupRoomsSum;
+    qs('#kRevTY').textContent=fmtC(tyRevSum);
+    qs('#kRevSTLY').textContent=fmtC(stlyRevSum);
+    qs('#kRevVar').textContent=fmtC(tyRevSum - stlyRevSum);
+    qs('#kPickupRev').textContent=fmtC(pickupRevSum);
+
+    if (rows.length){
+      const minD=rows[0].date, maxD=rows[rows.length-1].date;
+      qs('#rangeStat').textContent = `Range: ${minD.toLocaleDateString()} – ${maxD.toLocaleDateString()}`;
+      qs('#countStat').textContent = `Days in view: ${rows.length}`;
+    }else{
+      qs('#rangeStat').textContent='Range: —';
+      qs('#countStat').textContent='Days in view: 0';
+    }
+  }
+
+  /* ---------- Charts ---------- */
+  let roomsChart, revChart, cumChart;
+  function ensureChart(ctx, type, labelFormatter){
+    return new Chart(ctx,{
+      type,
+      data:{labels:[],datasets:[
+        {label:'TY', data:[], borderWidth:2, tension:.25},
+        {label:'STLY', data:[], borderWidth:2, tension:.25}
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{position:'top'}},
+        scales:{y:{ticks:{callback:v=>labelFormatter(v)}}}
+      }
+    });
+  }
+  function ensureAllCharts(){
+    if (!roomsChart) roomsChart = ensureChart(qs('#roomsChart').getContext('2d'),'line',v=>v);
+    if (!revChart)   revChart   = ensureChart(qs('#revChart').getContext('2d'),'line',v=>fmtC(v));
+    if (!cumChart)   cumChart   = ensureChart(qs('#cumChart').getContext('2d'),'line',v=>fmtC(v));
+  }
+  function renderCharts(){
+    ensureAllCharts();
+    const {ty, stly} = getActiveRows();
+    const viewTY = filterByMonth(ty);
+    const viewSTLY = filterByMonth(alignSTLYToYear(stly, state.alignYear));
+    const labels = Array.from(new Set([...viewTY, ...viewSTLY]
+      .map(r=> r.date.toLocaleDateString('en-US',{month:'short',day:'2-digit'})))).sort((a,b)=>a.localeCompare(b));
+
+    roomsChart.data.labels = labels;
+    roomsChart.data.datasets[0].data = viewTY.map(r=> r.sold||0 );
+    roomsChart.data.datasets[1].data = viewSTLY.map(r=> r.sold||0 );
+    roomsChart.update();
+
+    revChart.data.labels = labels;
+    revChart.data.datasets[0].data = viewTY.map(r=> r.rev||0 );
+    revChart.data.datasets[1].data = viewSTLY.map(r=> r.rev||0 );
+    revChart.update();
+
+    let cumTY=0, cumLY=0; const cumTYArr=[], cumLYArr=[];
+    viewTY.forEach(r=>{ cumTY += (r.rev||0); cumTYArr.push(cumTY); });
+    viewSTLY.forEach(r=>{ cumLY += (r.rev||0); cumLYArr.push(cumLY); });
+    cumChart.data.labels = labels;
+    cumChart.data.datasets[0].data = cumTYArr;
+    cumChart.data.datasets[1].data = cumLYArr;
+    cumChart.update();
+  }
+
+  /* ---------- Outlook (current + next 3 months) ---------- */
+  function monthKey(d){ return d.toISOString().slice(0,7); }
+  function monthName(y,m){ return new Date(y,m,1).toLocaleString('en-US',{month:'long',year:'numeric'}); }
+  function outlookMonths(){
+    const now = new Date();
+    const curEnd = new Date(now.getFullYear(), now.getMonth()+1, 0);
+    const remain = curEnd.getDate()-now.getDate()+1;
+    const n1 = new Date(now.getFullYear(), now.getMonth()+1, 1);
+    const n2 = new Date(now.getFullYear(), now.getMonth()+2, 1);
+    const n3 = new Date(now.getFullYear(), now.getMonth()+3, 1);
+    return [
+      {key:monthKey(now), label:monthName(now.getFullYear(), now.getMonth())+` (remaining ${remain} days)`},
+      {key:monthKey(n1), label:monthName(n1.getFullYear(), n1.getMonth())},
+      {key:monthKey(n2), label:monthName(n2.getFullYear(), n2.getMonth())},
+      {key:monthKey(n3), label:monthName(n3.getFullYear(), n3.getMonth())},
+    ];
+  }
+  function ensureOutlookDefaults(){
+    for(const m of outlookMonths()){
+      if (!state.outlook[m.key]) state.outlook[m.key]={tyRN:'',tyADR:'',tyRev:'',lyRN:'',lyADR:'',lyRev:''};
+    }
+  }
+  function renderOutlook(){
+    ensureOutlookDefaults();
+    const wrap=qs('#outlookCards'); wrap.innerHTML='';
+    outlookMonths().forEach(m=>{
+      const v=state.outlook[m.key];
+      const card=document.createElement('div'); card.className='card';
+      card.innerHTML=`
+        <h4>${m.label}</h4>
+        <div class="grid-form">
+          <label>TY Room Nights</label>
+          <input class="input" inputmode="numeric" pattern="[0-9]*" data-k="${m.key}" data-f="tyRN" value="${v.tyRN}">
+          <label>TY ADR</label>
+          <input class="input" inputmode="decimal" data-k="${m.key}" data-f="tyADR" value="${v.tyADR}">
+          <label>TY Revenue</label>
+          <input class="input" data-k="${m.key}" data-f="tyRev" value="${v.tyRev}">
+          <div class="span2 muted">Revenue auto = RN × ADR (you can override).</div>
+
+          <label>LY Room Nights</label>
+          <input class="input" inputmode="numeric" pattern="[0-9]*" data-k="${m.key}" data-f="lyRN" value="${v.lyRN}">
+          <label>LY ADR</label>
+          <input class="input" inputmode="decimal" data-k="${m.key}" data-f="lyADR" value="${v.lyADR}">
+          <label>LY Revenue</label>
+          <input class="input" data-k="${m.key}" data-f="lyRev" value="${v.lyRev}">
+          <div class="span2 muted">LY auto too if RN & ADR filled.</div>
+
+          <label class="span2"><span class="muted">Variance (auto)</span></label>
+          <div class="span2" id="var-${m.key}"></div>
+        </div>
+      `;
+      wrap.appendChild(card);
+    });
+    // Stable listeners (no re-render while typing)
+    qsa('#outlookCards input').forEach(inp=>{
+      inp.addEventListener('input',(e)=>{
+        const k=e.target.dataset.k, f=e.target.dataset.f;
+        const cur = state.outlook[k] || (state.outlook[k]={});
+        cur[f] = e.target.value;
+
+        if (f==='tyRN' || f==='tyADR'){
+          const rn=cleanNum(cur.tyRN), adr=cleanNum(cur.tyADR);
+          if (rn>0 && adr>0) cur.tyRev = String(rn*adr);
+          const peer = e.target.closest('.grid-form').querySelector(`input[data-k="${k}"][data-f="tyRev"]`);
+          if (peer) peer.value = cur.tyRev;
+        }
+        if (f==='lyRN' || f==='lyADR'){
+          const rn=cleanNum(cur.lyRN), adr=cleanNum(cur.lyADR);
+          if (rn>0 && adr>0) cur.lyRev = String(rn*adr);
+          const peer = e.target.closest('.grid-form').querySelector(`input[data-k="${k}"][data-f="lyRev"]`);
+          if (peer) peer.value = cur.lyRev;
+        }
+        updateOutlookVarianceRow(k);
+        save(false);
+      });
+    });
+    outlookMonths().forEach(m=>updateOutlookVarianceRow(m.key));
+  }
+  function updateOutlookVarianceRow(k){
+    const v=state.outlook[k] || {};
+    const rnVar = cleanNum(v.tyRN) - cleanNum(v.lyRN);
+    const adrVar = cleanNum(v.tyADR) - cleanNum(v.lyADR);
+    const revVar = cleanNum(v.tyRev) - cleanNum(v.lyRev);
+    const host=qs('#var-'+k);
+    if (host){
+      host.innerHTML = `
+        <span class="stat">RN Var: ${rnVar}</span>
+        <span class="stat">ADR Var: ${fmtC(adrVar)}</span>
+        <span class="stat">Rev Var: ${fmtC(revVar)}</span>
+      `;
+    }
+  }
+  qs('#resetOutlook').addEventListener('click',()=>{
+    state.outlook={}; renderOutlook(); save(true);
+  });
+
+  /* ---------- Save/Load/Export/Import ---------- */
+  function afterDataChange(){ updateSourceStat(); renderTable(); renderCharts(); save(false); }
+  function updateSourceStat(){
+    const a = state.activeTY ? `TY ${state.activeTY}` : 'TY —';
+    const b = state.activeSTLY ? `STLY ${state.activeSTLY}` : 'STLY —';
+    const r = state.totalRooms>0? `${state.totalRooms} rooms` : 'rooms not set';
+    qs('#sourceStat').textContent = `Source: ${a} · ${b} · Hotel Rooms: ${r}`;
+  }
+
+  function save(toast=true){
+    const payload = {
+      totalRooms: state.totalRooms,
+      snapshotsTY: state.snapshotsTY,
+      snapshotsSTLY: state.snapshotsSTLY,
+      activeTY: state.activeTY,
+      baselineTY: state.baselineTY,
+      activeSTLY: state.activeSTLY,
+      alignYear: state.alignYear,
+      monthFilter: state.monthFilter,
+      outlook: state.outlook
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    if (toast) flash('Saved');
+  }
+  function load(){
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw){ flash('Nothing saved yet'); return; }
+    try{
+      const s=JSON.parse(raw);
+      state.totalRooms = s.totalRooms||0;
+      state.snapshotsTY = s.snapshotsTY||{};
+      state.snapshotsSTLY = s.snapshotsSTLY||{};
+      state.activeTY = s.activeTY||null;
+      state.baselineTY = s.baselineTY||state.activeTY||null;
+      state.activeSTLY = s.activeSTLY||null;
+      state.alignYear = s.alignYear||new Date().getFullYear();
+      state.monthFilter = (typeof s.monthFilter==='number') ? s.monthFilter : -1;
+      state.outlook = s.outlook || {};
+      qs('#totalRooms').value = String(state.totalRooms||0);
+      ensureUploadSelectors();
+      refreshSelectors();
+      qs('#monthFilter').value = String(state.monthFilter);
+      renderOutlook();
+      afterDataChange();
+      flash('Loaded');
+    }catch(e){ console.error(e); flash('Load failed'); }
+  }
+  function exportJSON(){
+    const blob=new Blob([JSON.stringify({
+      totalRooms: state.totalRooms,
+      snapshotsTY: state.snapshotsTY,
+      snapshotsSTLY: state.snapshotsSTLY,
+      activeTY: state.activeTY, baselineTY: state.baselineTY, activeSTLY: state.activeSTLY,
+      alignYear: state.alignYear, monthFilter: state.monthFilter,
+      outlook: state.outlook
+    },null,2)],{type:'application/json'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download=`pacing-snapshots-${new Date().toISOString().slice(0,10)}.json`; document.body.appendChild(a); a.click(); a.remove();
+  }
+  function importJSON(file){
+    const r=new FileReader();
+    r.onload=e=>{ try{
+      const s=JSON.parse(e.target.result);
+      state.totalRooms = s.totalRooms||0;
+      state.snapshotsTY = s.snapshotsTY||{};
+      state.snapshotsSTLY = s.snapshotsSTLY||{};
+      state.activeTY = s.activeTY||null;
+      state.baselineTY = s.baselineTY||state.activeTY||null;
+      state.activeSTLY = s.activeSTLY||null;
+      state.alignYear = s.alignYear||new Date().getFullYear();
+      state.monthFilter = (typeof s.monthFilter==='number') ? s.monthFilter : -1;
+      state.outlook = s.outlook || {};
+      qs('#totalRooms').value = String(state.totalRooms||0);
+      ensureUploadSelectors();
+      refreshSelectors();
+      qs('#monthFilter').value = String(state.monthFilter);
+      renderOutlook();
+      afterDataChange();
+      flash('Imported');
+    }catch(err){ console.error(err); flash('Import failed'); } };
+    r.readAsText(file);
+  }
+
+  // CSV export
+  function downloadCSV(){
+    const rows = [[
+      'Date','Rooms OTB (TY)','Pickup Rooms','Rooms OTB (STLY)','Rooms Var (TY–STLY)',
+      'Occ% (TY)','Occ% (STLY)','Occ Var (TY–STLY)',
+      'ADR (TY)','ADR (STLY)','ADR Var (TY–STLY)',
+      'Pickup Rev','Rev (TY)','Rev (STLY)','Rev Var (TY–STLY)'
+    ]];
+    qsa('#paceBody tr').forEach(tr=>{
+      const tds = Array.from(tr.children).map(td=> td.textContent);
+      rows.push(tds);
+    });
+    const csv = rows.map(r=> r.map(x=>{
+      const s = String(x??'');
+      return /[",\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+    }).join(',')).join('\n');
+    const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='pacing_view.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+
+  /* ---------- Events ---------- */
+  qs('#tySnapshotSelect').addEventListener('change',e=>{ state.activeTY=e.target.value||null; if (!state.baselineTY) state.baselineTY=state.activeTY; afterDataChange(); });
+  qs('#pickupBaselineSelect').addEventListener('change',e=>{ state.baselineTY=e.target.value||null; afterDataChange(); });
+  qs('#stlySnapshotSelect').addEventListener('change',e=>{ state.activeSTLY=e.target.value||null; afterDataChange(); });
+  qs('#alignYear').addEventListener('change',e=>{ state.alignYear=parseInt(e.target.value)||new Date().getFullYear(); afterDataChange(); });
+  qs('#monthFilter').addEventListener('change',e=>{ state.monthFilter=parseInt(e.target.value); afterDataChange(); });
+
+  qs('#totalRooms').addEventListener('input',e=>{ state.totalRooms=Math.max(0,parseInt(e.target.value)||0); afterDataChange(); });
+  qs('#saveBtn').addEventListener('click',()=>save(true));
+  qs('#loadBtn').addEventListener('click',load);
+  qs('#exportBtn').addEventListener('click',exportJSON);
+  qs('#importFile').addEventListener('change',e=>{ if(e.target.files?.[0]) importJSON(e.target.files[0]); });
+  qs('#downloadCsvBtn').addEventListener('click', downloadCSV);
+
+  // Toast
+  let toastEl;
+  function flash(msg){
+    if(!toastEl){ toastEl=document.createElement('div'); Object.assign(toastEl.style,{
+      position:'fixed',bottom:'18px',left:'50%',transform:'translateX(-50%)',padding:'10px 14px',
+      background:'rgba(44,62,80,.95)',color:'#fff',borderRadius:'10px',boxShadow:'0 8px 20px rgba(0,0,0,.2)',zIndex:'9999',transition:'opacity .3s'
+    }); document.body.appendChild(toastEl); }
+    toastEl.textContent=msg; toastEl.style.opacity='1'; setTimeout(()=>{ toastEl.style.opacity='0'; },1200);
+  }
+
+  // Init
+  qs('#monthFilter').value='-1';
+  ensureUploadSelectors();
+  refreshSelectors();
+  renderOutlook();
+  afterDataChange();
+})();
+</script>
+
+</body>
+</html>

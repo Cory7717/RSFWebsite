@@ -142,6 +142,15 @@
     </div>
 
     <div class="pill">
+      <span>View:</span>
+      <select id="viewSelect" aria-label="View mode">
+        <option value="rolling12">Rolling 12</option>
+        <option value="ytd">YTD</option>
+        <option value="month">Month</option>
+      </select>
+    </div>
+
+    <div class="pill">
       <span>Rooms in hotel:</span>
       <input id="roomsInput" type="number" min="1" step="1" value="134" aria-label="Rooms in hotel"/>
     </div>
@@ -186,6 +195,7 @@
     const fileInput = document.getElementById('fileInput');
     const hotelSel = document.getElementById('hotelSelect');
     const periodInp = document.getElementById('periodInput');
+    const viewSelect = document.getElementById('viewSelect');
     const roomsInput = document.getElementById('roomsInput');
     const btnSample = document.getElementById('btnSample');
     const btnExportNotes = document.getElementById('btnExportNotes');
@@ -228,7 +238,6 @@
       return `${MONTHS[mm-1]} ${yy}`;
     }
     function daysInMonthLabel(label){
-      // label like "Aug 2024"
       const m = label.match(/^([A-Za-z]{3})\s+(\d{4})$/);
       if(!m) return 30; // fallback
       const idx = MONTHS.indexOf(m[1]);
@@ -236,8 +245,19 @@
       if(idx<0) return 30;
       return new Date(year, idx+1, 0).getDate();
     }
+    function labelToYM(label){
+      const m = label.match(/^([A-Za-z]{3})\s+(\d{4})$/);
+      if(!m) return null;
+      const idx = MONTHS.indexOf(m[1]);
+      const year = parseInt(m[2],10);
+      if(idx<0) return null;
+      return {y:year, m:idx}; // m: 0..11
+    }
+    function ymToLabel(y, mIndex){
+      return `${MONTHS[mIndex]} ${y}`;
+    }
 
-    // Notes helpers (RESTORED)
+    // Notes helpers
     const noteKey = (hotel, period, path) => `plnote:${hotel}:${period}:${path}`;
     const getNote = (h,p,path) => localStorage.getItem(noteKey(h,p,path)) || '';
     const setNote = (h,p,path,val) => localStorage.setItem(noteKey(h,p,path), val||'');
@@ -251,7 +271,6 @@
     }
 
     function findAsOfDate(rows){
-      // Look first 12 rows for "As of Date:" and return adjacent value
       for(let r=0;r<Math.min(12,rows.length);r++){
         const row = rows[r]||[];
         for(let c=0;c<Math.min(6,row.length);c++){
@@ -268,7 +287,6 @@
     }
 
     function findHeaderAndLabelCol(rows){
-      // Prefer explicit "Account name"
       for(let i=0;i<rows.length;i++){
         const row = rows[i]||[];
         for(let c=0;c<Math.min(4,row.length);c++){
@@ -278,7 +296,6 @@
           }
         }
       }
-      // Fallback: first row with many "Actual"
       for(let i=0;i<rows.length;i++){
         const row = rows[i]||[];
         const nonEmptyIdx = row.findIndex(x=>String(x||'').trim()!=='');
@@ -323,7 +340,6 @@
         }
       }
 
-      // .xlsx / .xls
       try {
         const buf = await file.arrayBuffer();
         return XLSX.read(buf, { type:'array' });
@@ -345,6 +361,9 @@
       localStorage.setItem(ROOMS_KEY, String(val));
       if(extracted) renderAll(extracted); // refresh occupancy
     });
+
+    // ---------- React to view/period changes
+    [periodInp, viewSelect].forEach(el => el.addEventListener('change', ()=> { if(extracted) renderAll(extracted); }));
 
     // ---------- Upload / parse (safer listener)
     fileInput.addEventListener('change', async (e)=>{
@@ -373,12 +392,10 @@
         const {headerIdx,labelCol} = findHeaderAndLabelCol(rows);
         const asOfDate = findAsOfDate(rows);
 
-        // months on row above header
         const monthsRow = rows[Math.max(0, headerIdx-1)] || [];
         const rawMonthCells = monthsRow.slice(labelCol+1);
         let headers = rawMonthCells.map(v => toMonthYear(String(v).trim()) || String(v).trim() || 'Col');
 
-        // detect TTM
         const headerAbove = rows[Math.max(0, headerIdx-2)] || [];
         const hasTextTotalTTM = headerAbove.some(x => /total\s*ttm/i.test(String(x)));
         if(hasTextTotalTTM){
@@ -441,6 +458,52 @@
       return { sections, paths };
     }
 
+    // ---------- View helpers
+    function getSelectedYM(){
+      // from <input type="month" value="YYYY-MM">
+      const v = periodInp.value || '2025-07';
+      const [yy, mm] = v.split('-').map(x=>parseInt(x,10));
+      return {y:yy, m:(mm-1)};
+    }
+
+    function buildViewHeaders(allHeaders){
+      // allHeaders are like ["Aug 2024", ..., "TTM"]
+      const view = viewSelect.value || 'rolling12';
+      const {y, m} = getSelectedYM();
+
+      const monthsOnly = allHeaders.filter(h=>h!=='TTM');
+      // Convert to map label->(y,m)
+      const ymMap = monthsOnly
+        .map(h => ({h, ym: labelToYM(h)}))
+        .filter(x => !!x.ym);
+
+      if(view === 'month'){
+        const target = ymToLabel(y, m);
+        const found = ymMap.find(x=> x.h === target);
+        const cols = found ? [found.h] : []; // if missing, show nothing
+        return {cols, includeTTM:false};
+      }
+
+      if(view === 'ytd'){
+        const cols = ymMap
+          .filter(x => x.ym.y === y && x.ym.m <= m)
+          .map(x => x.h);
+        return {cols, includeTTM:false};
+      }
+
+      // rolling12
+      // collect last 12 months ending at (y,m)
+      const cols = [];
+      for(let i=11;i>=0;i--){
+        const date = new Date(y, m, 1);
+        date.setMonth(date.getMonth()-i);
+        const label = ymToLabel(date.getFullYear(), date.getMonth());
+        if(monthsOnly.includes(label)) cols.push(label);
+      }
+      const includeTTM = allHeaders.includes('TTM'); // keep the sheet’s TTM visible in rolling 12
+      return {cols, includeTTM};
+    }
+
     // ---------- Rendering
     const NUMERIC_ROOM_REGEX = /(available\s*rooms?|occupied\s*rooms?|rooms\s*sold)/i;
 
@@ -457,6 +520,9 @@
         const secNode = data.sections[sec];
         const headers = (secNode && secNode._headers) ? secNode._headers.slice() : [];
         const hasTTM = !!secNode._hasTTM;
+
+        const {cols:viewCols, includeTTM} = buildViewHeaders(headers);
+        const viewHeaders = includeTTM ? [...viewCols, 'TTM'] : viewCols;
 
         const wrap = document.createElement('div');
         wrap.className='section collapsed';
@@ -489,8 +555,8 @@
             <thead>
               <tr>
                 <th class="left">Category</th>
-                ${headers.map(h=>`<th>${escHtml(h)}</th>`).join('')}
-                ${hasTTM ? '' : '<th>Total</th>'}
+                ${viewHeaders.map(h=>`<th>${escHtml(h)}</th>`).join('')}
+                <th>Subtotal</th>
                 <th class="no-print">Notes</th>
               </tr>
             </thead>
@@ -515,17 +581,18 @@
 
             const isNumericRooms = NUMERIC_ROOM_REGEX.test(cat);
 
-            const amountTds = headers.map(col=>{
+            const amountTds = viewHeaders.map(col=>{
               const val = row.Columns[col]||0;
               const html = isNumericRooms ? fmtN(val) : fmtC(val);
               return `<td class="amount" data-path="${escHtml(path)}" data-col="${escHtml(col)}">${html}</td>`;
             }).join('');
 
+            const subtotal = viewHeaders.reduce((a,h)=> a + (row.Columns[h]||0), 0);
             const tr = document.createElement('tr');
             tr.innerHTML = `
               <th class="left">${escHtml(cat)}</th>
               ${amountTds}
-              ${hasTTM ? '' : `<td class="amount" data-path="${escHtml(path)}" data-col="Total">${isNumericRooms?fmtN(row.Total):fmtC(row.Total)}</td>`}
+              <td class="amount" data-path="${escHtml(path)}" data-col="Subtotal">${isNumericRooms?fmtN(subtotal):fmtC(subtotal)}</td>
               <td class="notes-cell no-print"></td>
             `;
             const notesTd = tr.querySelector('.notes-cell');
@@ -538,16 +605,16 @@
             tb.appendChild(tr);
           });
 
-          // Insert computed Occupancy % row if both series exist
+          // Insert computed Occupancy % row if both series exist (based on visible months only)
           if(availableRow && occupiedRow){
             const occVals = {};
             let sumDays = 0;
             let sumOccRooms = 0;
 
-            headers.forEach(h=>{
-              if(h==='TTM') return;
+            viewHeaders.forEach(h=>{
+              if(h==='TTM') return; // TTM shown as-is from sheet; occupancy we compute from month columns
               const days = daysInMonthLabel(h);
-              const availableBase = roomsCount * days; // denominator
+              const availableBase = roomsCount * days;
               const occ = (availableBase>0) ? (parseNum(occupiedRow.Columns[h]) / availableBase) : 0;
               occVals[h] = occ;
               sumDays += days;
@@ -556,14 +623,15 @@
 
             const ttmOcc = (sumDays>0 && roomsCount>0) ? (sumOccRooms / (roomsCount * sumDays)) : 0;
 
+            const occSubtotal = ttmOcc; // for the subtotal column we display the period occupancy
             const occTr = document.createElement('tr');
             occTr.innerHTML = `
               <th class="left">Occupancy % (computed)</th>
-              ${headers.map(h=>{
+              ${viewHeaders.map(h=>{
                 if(h==='TTM') return `<td class="">${fmtPct(ttmOcc)}</td>`;
                 return `<td class="">${fmtPct(occVals[h] ?? 0)}</td>`;
               }).join('')}
-              ${hasTTM ? '' : `<td class="">${fmtPct(ttmOcc)}</td>`}
+              <td class="">${fmtPct(occSubtotal)}</td>
               <td class="no-print"></td>
             `;
             tb.appendChild(occTr);
@@ -667,7 +735,7 @@
       w.print();
     });
 
-    // Sample with Room Statistics to preview occupancy row
+    // Sample with Room Statistics to preview view modes + occupancy row
     if (btnSample) btnSample.addEventListener('click',()=>{
       const headers = ['Aug 2024','Sep 2024','Oct 2024','Nov 2024','Dec 2024','Jan 2025','Feb 2025','Mar 2025','Apr 2025','May 2025','Jun 2025','Jul 2025','TTM'];
       function row(h,vals){
@@ -688,7 +756,8 @@
         'Rooms':{
           _headers: headers, _hasTTM:true,
           'Rooms Revenue':{
-            'Transient - Rack Rate': row(headers,[98096,0,0,0,0,0,0,0,0,0,0,0,1317726])
+            'Transient - Rack Rate': row(headers,[98096,100120,102330,101220,98000,95000,97000,99000,100500,101800,102200,103400,1317726]),
+            'Group': row(headers,[22000,21000,23000,24000,21000,20000,22000,23000,24000,25000,26000,27000,280000])
           }
         }
       };

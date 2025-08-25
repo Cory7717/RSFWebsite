@@ -146,6 +146,7 @@
       <select id="viewSelect" aria-label="View mode">
         <option value="rolling12">Rolling 12</option>
         <option value="ytd">YTD</option>
+        <option value="quarter">Quarter</option>
         <option value="month">Month</option>
       </select>
     </div>
@@ -208,8 +209,7 @@
     const invClose = document.getElementById('invClose');
 
     // ---------- State
-    // { sections: { [section]: { _headers: string[], _hasTTM: boolean, [sub]: { [cat]: rowObj } } }, paths: [] }
-    let extracted = null;
+    let extracted = null; // { sections:{...}, paths:[] }
     let currentFilter = '';
     const ROOMS_KEY='pl_rooms_in_hotel';
 
@@ -218,7 +218,7 @@
     const fmtN = n => new Intl.NumberFormat('en-US',{maximumFractionDigits:0}).format(Number(n)||0);
     const fmtPct = n => new Intl.NumberFormat('en-US',{style:'percent',maximumFractionDigits:1}).format(isFinite(n)?n:0);
 
-    const escHtml = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const escHtml = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39'}[c]));
     const parseNum = v => {
       if(v==null) return 0;
       const s = String(v).replace(/[$,%()]/g, m => (m==='('||m===')') ? '' : '').replace(/,/g,'').trim();
@@ -251,10 +251,16 @@
       const idx = MONTHS.indexOf(m[1]);
       const year = parseInt(m[2],10);
       if(idx<0) return null;
-      return {y:year, m:idx}; // m: 0..11
+      return {y:year, m:idx}; // 0..11
     }
     function ymToLabel(y, mIndex){
       return `${MONTHS[mIndex]} ${y}`;
+    }
+    function quarterOf(mIndex){ // 0..11
+      if(mIndex<=2) return 1;
+      if(mIndex<=5) return 2;
+      if(mIndex<=8) return 3;
+      return 4;
     }
 
     // Notes helpers
@@ -310,7 +316,7 @@
       return {headerIdx:0,labelCol:0};
     }
 
-    // --------------- Robust reader with fallbacks ---------------
+    // Robust reader
     async function readWorkbook(file){
       if(typeof XLSX === 'undefined'){
         throw new Error('XLSX library not loaded. Ensure the XLSX <script> tag is present.');
@@ -353,7 +359,7 @@
       }
     }
 
-    // ---------- Persist rooms input
+    // Persist rooms input
     roomsInput.value = localStorage.getItem(ROOMS_KEY) || roomsInput.value || 134;
     roomsInput.addEventListener('input', ()=>{
       const val = Math.max(1, parseInt(roomsInput.value||'134',10));
@@ -362,10 +368,10 @@
       if(extracted) renderAll(extracted); // refresh occupancy
     });
 
-    // ---------- React to view/period changes
+    // React to view/period changes
     [periodInp, viewSelect].forEach(el => el.addEventListener('change', ()=> { if(extracted) renderAll(extracted); }));
 
-    // ---------- Upload / parse (safer listener)
+    // Upload / parse
     fileInput.addEventListener('change', async (e)=>{
       const f = e.target.files && e.target.files[0];
       if(!f) return;
@@ -460,19 +466,15 @@
 
     // ---------- View helpers
     function getSelectedYM(){
-      // from <input type="month" value="YYYY-MM">
       const v = periodInp.value || '2025-07';
       const [yy, mm] = v.split('-').map(x=>parseInt(x,10));
       return {y:yy, m:(mm-1)};
     }
 
     function buildViewHeaders(allHeaders){
-      // allHeaders are like ["Aug 2024", ..., "TTM"]
       const view = viewSelect.value || 'rolling12';
       const {y, m} = getSelectedYM();
-
       const monthsOnly = allHeaders.filter(h=>h!=='TTM');
-      // Convert to map label->(y,m)
       const ymMap = monthsOnly
         .map(h => ({h, ym: labelToYM(h)}))
         .filter(x => !!x.ym);
@@ -480,19 +482,43 @@
       if(view === 'month'){
         const target = ymToLabel(y, m);
         const found = ymMap.find(x=> x.h === target);
-        const cols = found ? [found.h] : []; // if missing, show nothing
-        return {cols, includeTTM:false};
+        const cols = found ? [found.h] : [];
+        return {cols, includeTTM:false, quarterMap:null};
       }
 
       if(view === 'ytd'){
         const cols = ymMap
           .filter(x => x.ym.y === y && x.ym.m <= m)
           .map(x => x.h);
-        return {cols, includeTTM:false};
+        return {cols, includeTTM:false, quarterMap:null};
       }
 
-      // rolling12
-      // collect last 12 months ending at (y,m)
+      if(view === 'quarter'){
+        // quarters for selected year up to selected quarter; include only quarters that have at least one month present
+        const selQ = quarterOf(m);
+        const qDefs = {
+          1: [0,1,2],   // Jan, Feb, Mar
+          2: [3,4,5],   // Apr, May, Jun
+          3: [6,7,8],   // Jul, Aug, Sep
+          4: [9,10,11]  // Oct, Nov, Dec
+        };
+        const quarterMap = {};
+        const cols = [];
+        for(let q=1; q<=selQ; q++){
+          const monthsIdx = qDefs[q];
+          const labels = monthsIdx
+            .map(mi => ymToLabel(y, mi))
+            .filter(lbl => monthsOnly.includes(lbl));
+          if(labels.length){
+            const qLabel = `Q${q} ${y}`;
+            quarterMap[qLabel] = labels; // month labels included in this quarter
+            cols.push(qLabel);
+          }
+        }
+        return {cols, includeTTM:false, quarterMap};
+      }
+
+      // rolling12: last 12 months ending at selected month
       const cols = [];
       for(let i=11;i>=0;i--){
         const date = new Date(y, m, 1);
@@ -500,8 +526,8 @@
         const label = ymToLabel(date.getFullYear(), date.getMonth());
         if(monthsOnly.includes(label)) cols.push(label);
       }
-      const includeTTM = allHeaders.includes('TTM'); // keep the sheet’s TTM visible in rolling 12
-      return {cols, includeTTM};
+      const includeTTM = allHeaders.includes('TTM');
+      return {cols, includeTTM, quarterMap:null};
     }
 
     // ---------- Rendering
@@ -519,9 +545,8 @@
       Object.keys(data.sections).forEach(sec=>{
         const secNode = data.sections[sec];
         const headers = (secNode && secNode._headers) ? secNode._headers.slice() : [];
-        const hasTTM = !!secNode._hasTTM;
 
-        const {cols:viewCols, includeTTM} = buildViewHeaders(headers);
+        const {cols:viewCols, includeTTM, quarterMap} = buildViewHeaders(headers);
         const viewHeaders = includeTTM ? [...viewCols, 'TTM'] : viewCols;
 
         const wrap = document.createElement('div');
@@ -581,13 +606,23 @@
 
             const isNumericRooms = NUMERIC_ROOM_REGEX.test(cat);
 
+            // Value getter per column (month or quarter or TTM)
+            function getColVal(colLabel){
+              if(quarterMap && quarterMap[colLabel]){
+                // Quarter: sum its months
+                return quarterMap[colLabel].reduce((a,mon)=> a + (row.Columns[mon]||0), 0);
+              }
+              // Month/rolling/YTD direct columns or TTM
+              return row.Columns[colLabel]||0;
+            }
+
             const amountTds = viewHeaders.map(col=>{
-              const val = row.Columns[col]||0;
+              const val = getColVal(col);
               const html = isNumericRooms ? fmtN(val) : fmtC(val);
               return `<td class="amount" data-path="${escHtml(path)}" data-col="${escHtml(col)}">${html}</td>`;
             }).join('');
 
-            const subtotal = viewHeaders.reduce((a,h)=> a + (row.Columns[h]||0), 0);
+            const subtotal = viewHeaders.reduce((a,h)=> a + getColVal(h), 0);
             const tr = document.createElement('tr');
             tr.innerHTML = `
               <th class="left">${escHtml(cat)}</th>
@@ -605,30 +640,49 @@
             tb.appendChild(tr);
           });
 
-          // Insert computed Occupancy % row if both series exist (based on visible months only)
+          // Computed Occupancy % based on visible columns
           if(availableRow && occupiedRow){
+            // For occupancy, we recompute per displayed column (month or quarter; TTM uses combined visible months)
+            function daysForCol(colLabel){
+              if(quarterMap && quarterMap[colLabel]){
+                return quarterMap[colLabel].reduce((a,mon)=> a + daysInMonthLabel(mon), 0);
+              }
+              if(colLabel==='TTM') return 0; // handled via subtotal calc below
+              return daysInMonthLabel(colLabel);
+            }
+            function occupiedForCol(colLabel){
+              if(quarterMap && quarterMap[colLabel]){
+                return quarterMap[colLabel].reduce((a,mon)=> a + (parseNum(occupiedRow.Columns[mon])||0), 0);
+              }
+              return parseNum(occupiedRow.Columns[colLabel])||0;
+            }
+
             const occVals = {};
             let sumDays = 0;
-            let sumOccRooms = 0;
+            let sumOcc = 0;
 
             viewHeaders.forEach(h=>{
-              if(h==='TTM') return; // TTM shown as-is from sheet; occupancy we compute from month columns
-              const days = daysInMonthLabel(h);
-              const availableBase = roomsCount * days;
-              const occ = (availableBase>0) ? (parseNum(occupiedRow.Columns[h]) / availableBase) : 0;
+              if(h==='TTM') return; // we'll compute subtotal-based occupancy separately
+              const d = daysForCol(h);
+              const occRooms = occupiedForCol(h);
+              const base = roomsCount * d;
+              const occ = base>0 ? (occRooms / base) : 0;
               occVals[h] = occ;
-              sumDays += days;
-              sumOccRooms += parseNum(occupiedRow.Columns[h]) || 0;
+              sumDays += d;
+              sumOcc += occRooms;
             });
 
-            const ttmOcc = (sumDays>0 && roomsCount>0) ? (sumOccRooms / (roomsCount * sumDays)) : 0;
+            // Subtotal occupancy over visible months (across all quarters if in quarter mode)
+            const occSubtotal = (sumDays>0 && roomsCount>0) ? (sumOcc / (roomsCount * sumDays)) : 0;
 
-            const occSubtotal = ttmOcc; // for the subtotal column we display the period occupancy
             const occTr = document.createElement('tr');
             occTr.innerHTML = `
               <th class="left">Occupancy % (computed)</th>
               ${viewHeaders.map(h=>{
-                if(h==='TTM') return `<td class="">${fmtPct(ttmOcc)}</td>`;
+                if(h==='TTM'){
+                  // show same subtotal-based occupancy in TTM column for uniformity
+                  return `<td class="">${fmtPct(occSubtotal)}</td>`;
+                }
                 return `<td class="">${fmtPct(occVals[h] ?? 0)}</td>`;
               }).join('')}
               <td class="">${fmtPct(occSubtotal)}</td>
@@ -735,7 +789,7 @@
       w.print();
     });
 
-    // Sample with Room Statistics to preview view modes + occupancy row
+    // Sample with Room Statistics and Rooms to preview all modes
     if (btnSample) btnSample.addEventListener('click',()=>{
       const headers = ['Aug 2024','Sep 2024','Oct 2024','Nov 2024','Dec 2024','Jan 2025','Feb 2025','Mar 2025','Apr 2025','May 2025','Jun 2025','Jul 2025','TTM'];
       function row(h,vals){
